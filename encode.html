@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>WAV Encoder</title>
+</head>
+
+<body>
+
+<h2>Encode Message Into WAV</h2>
+
+<input type="file" id="wavFile"><br><br>
+<textarea id="message" placeholder="Type message"></textarea><br><br>
+
+<button onclick="encode()">Encode</button>
+
+<p id="status"></p>
+<a id="downloadLink" style="display:none"></a>
+
+<script>
+
+	const END_MARKER = "###END###";
+	const HEADER_SIZE = 44;
+
+	function textToBits(text) {
+		const bits = [];
+		for (let i = 0; i < text.length; i++) {
+			const charCode = text.charCodeAt(i);
+			for (let bit = 7; bit >= 0; bit--) {
+				bits.push((charCode >>> bit) & 1);
+			}
+		}
+		return bits;
+	}
+
+	function getSamples(buffer) {
+		return new Int16Array(buffer, HEADER_SIZE);
+	}
+
+	function buildWAV(originalBuffer, modifiedSamples) {
+		const dataSize = modifiedSamples.length * 2;
+		const fileSize = HEADER_SIZE + dataSize;
+		const out = new ArrayBuffer(fileSize);
+		const outView = new DataView(out);
+		const origView = new DataView(originalBuffer);
+
+		outView.setUint32(0, 0x52494646, false);
+		outView.setUint32(0, 0x52494646, false);
+		outView.setUint32(4, fileSize - 8, true);
+		outView.setUint32(8, 0x57415645, false);
+		outView.setUint32(12, 0x666d7420, false);
+		outView.setUint32(16, 16, true);
+		outView.setUint16(20, 1, true);
+		outView.setUint16(22, origView.getUint16(22, true), true);
+		outView.setUint32(24, origView.getUint32(24, true), true);
+		outView.setUint32(28, origView.getUint32(28, true), true);
+		outView.setUint16(32, origView.getUint16(32, true), true);
+		outView.setUint16(34, origView.getUint16(34, true), true);
+		outView.setUint32(36, 0x64617461, false);
+		outView.setUint32(40, dataSize, true);
+	
+
+		for (let i = 0; i < modifiedSamples.length; i++) {
+			outView.setInt16(HEADER_SIZE + i * 2, modifiedSamples[i], true);
+		}
+		return out;
+	}
+
+	function encode() {
+		const fileInput = document.getElementById('wavFile');
+		const message = document.getElementById('message').value;
+		const status = document.getElementById('status');
+
+		if (!fileInput.files[0]) {
+			status.innerText = 'please select a wav file';
+			return;
+		}
+		if (!message) {
+			status.innerText = 'please type a message';
+			return;
+		}
+		
+		const reader = new FileReader();
+		reader.onload = function(e) {
+			const buffer = e.target.result;
+			const samples = getSamples(buffer);
+			const bits = textToBits(message + END_MARKER);
+			
+			if (bits.length > samples.length) {
+				status.innerText = 'message too long';
+				return;
+			}
+
+			const modified = Int16Array.from(samples);
+			for (let i = 0; i < bits.length; i++) {
+				modified[i] = (modified[i] & ~1) | bits[i];
+			}
+
+			const outBuffer = buildWAV(buffer, modified);
+			const blob = new Blob([outBuffer], { type: 'audio/wav' });
+			const url = URL.createObjectURL(blob);
+
+			const link = document.getElementById('downloadLink');
+			link.href = url;
+			link.download = 'encoded.wav';
+			link.style.display = 'block';
+			link.innerText = 'download encoded wav';
+			status.innerText = 'done!';
+
+		}
+		reader.readAsArrayBuffer(fileInput.files[0]);
+	}
+
+</script>
+
+</body>
+</html>
+
