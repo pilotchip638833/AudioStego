@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+<title>WAV Message Decoder</title>
+</head>
+
+<body>
+
+<h2>Decode Hidden Message From WAV</h2>
+
+<input type="file" id="wavFile"><br><br>
+
+<button onclick="decode()">Decode Message</button>
+
+<p id="status"></p>
+
+<h3>Decoded Message:</h3>
+<p id="result"></p>
+
+<script>
+
+const END_MARKER = "###END###";
+const HEADER_SIZE = 44;
+
+function getSamples(buffer) {
+  return new Int16Array(buffer, HEADER_SIZE);
+}
+
+function decode() {
+  const fileInput = document.getElementById('wavFile');
+  const status = document.getElementById('status');
+  const result = document.getElementById('result');
+
+  if (!fileInput.files[0]) {
+    status.innerText = 'please select a wav file';
+    return;
+  }
+
+  const reader = new FileReader();
+
+  reader.onload = function(e) {
+
+    const samples = getSamples(e.target.result);
+
+    let b = 0;
+    let bc = 0;
+    let text = '';
+
+    for (let i = 0; i < samples.length; i++) {
+
+      b = (b << 1) | (samples[i] & 1);
+      bc++;
+
+      if (bc === 8) {
+
+        text += String.fromCharCode(b);
+        b = 0;
+        bc = 0;
+
+        if (text.endsWith(END_MARKER)) {
+          result.innerText = text.slice(0, -END_MARKER.length);
+          status.innerText = 'message found!';
+          return;
+        }
+      }
+    }
+
+    status.innerText = 'no message found';
+
+  };
+
+  reader.readAsArrayBuffer(fileInput.files[0]);
+}
+
+</script>
+
+</body>
+</html>
