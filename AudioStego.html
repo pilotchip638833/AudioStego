@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>wav stego thing</title>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Syne:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    /* reset - removes default browser margin/padding so everything looks consistent */
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    /* css variables - define all colours in one place so they're easy to change */
+    :root {
+      --bg: #080b10;
+      --surface: #0e1318;
+      --border: #1e2a35;
+      --teal: #00ffe0;
+      --pink: #ff6b6b;
+      --text: #c8d8e0;
+      --dim: #4a6070;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 14px;
+      min-height: 100vh;
+      /* subtle grid lines in the background using repeating css gradients */
+      background-image: 
+        linear-gradient(rgba(0,255,224,0.03) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(0,255,224,0.03) 1px, transparent 1px);
+      background-size: 40px 40px;
+    }
+
+    .container {
+      max-width: 760px;
+      margin: 0 auto;
+      padding: 40px 24px;
+    }
+
+    .header {
+      margin-bottom: 40px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 24px;
+    }
+
+    .header-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 8px;
+    }
+
+    /* blinking cursor effect using css animation */
+    .blink {
+      width: 12px;
+      height: 24px;
+      background: var(--teal);
+      animation: blink 1s step-end infinite;
+    }
+
+    /* step-end makes the blink sharp rather than fading */
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+
+    h1 {
+      font-family: 'Syne', sans-serif;
+      font-size: 28px;
+      color: var(--teal);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+    }
+
+    .subhead {
+      color: var(--dim);
+      font-size: 12px;
+      letter-spacing: 1px;
+    }
+
+    /* tab bar - sits above the panels */
+    .tabs {
+      display: flex;
+      gap: 2px;
+      margin-bottom: 32px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .tab {
+      padding: 12px 28px;
+      background: transparent;
+      border: none;
+      /* negative margin pulls the tab down to overlap the border-bottom on .tabs */
+      border-bottom: 2px solid transparent;
+      color: var(--dim);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 13px;
+      cursor: pointer;
+      margin-bottom: -1px;
+    }
+
+    /* active tab gets the accent colour and a solid underline */
+    .tab.active {
+      color: var(--teal);
+      border-bottom-color: var(--teal);
+    }
+
+    /* panels are hidden by default, only the active one is shown */
+    .panel {
+      display: none;
+    }
+
+    .panel.active {
+      display: block;
+    }
+
+    .step {
+      font-size: 11px;
+      color: var(--dim);
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      margin: 24px 0 8px 0;
+    }
+
+    /* dropzone - the file drag and drop area */
+    .dropzone {
+      border: 1px dashed var(--border);
+      border-radius: 4px;
+      padding: 28px;
+      text-align: center;
+      cursor: pointer;
+      /* relative positioning so the hidden file input can be overlaid on top */
+      position: relative;
+    }
+
+    /* highlight when user drags a file over */
+    .dropzone.dragover {
+      border-color: var(--teal);
+      background: rgba(0, 255, 224, 0.04);
+    }
+
+    /* solid border once a file has been loaded */
+    .dropzone.hasfile {
+      border-color: var(--teal);
+      border-style: solid;
+    }
+
+    .dropzone-icon {
+      font-size: 28px;
+      opacity: 0.5;
+      margin-bottom: 8px;
+    }
+
+    .dropzone-text {
+      color: var(--dim);
+      font-size: 12px;
+    }
+
+    .filename {
+      color: var(--teal);
+      font-size: 13px;
+      margin-top: 4px;
+    }
+
+    /*
+      the file input is invisible but covers the entire dropzone.
+      opacity: 0 hides it visually but it still receives clicks and drops.
+      this is better than display:none which would stop it working entirely.
+      clicking anywhere on the dropzone naturally triggers the file dialog.
+    */
+    .dropzone input[type="file"] {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      opacity: 0;
+      cursor: pointer;
+    }
+
+    /* capacity info - shown after a file is loaded */
+    .capacity {
+      margin-top: 10px;
+      font-size: 11px;
+      color: var(--dim);
+      display: none;
+    }
+
+    .capacity.show {
+      display: block;
+    }
+
+    /* the thin bar showing how much of the file's capacity is being used */
+    .capacity-bar {
+      height: 3px;
+      background: var(--border);
+      border-radius: 2px;
+      margin-top: 6px;
+      overflow: hidden;
+    }
+
+    .capacity-fill {
+      height: 100%;
+      background: var(--teal);
+      width: 0%;
+      transition: width 0.4s ease;
+    }
+
+    textarea {
+      width: 100%;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      color: var(--text);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 13px;
+      padding: 12px;
+      resize: vertical;
+      min-height: 120px;
+      outline: none;
+    }
+
+    /* highlight the textarea border when it's focused */
+    textarea:focus {
+      border-color: var(--teal);
+    }
+
+    .counter {
+      text-align: right;
+      font-size: 11px;
+      color: var(--dim);
+      margin-top: 4px;
+    }
+
+    .btn {
+      width: 100%;
+      padding: 14px;
+      margin-top: 28px;
+      background: transparent;
+      border: 1px solid var(--teal);
+      color: var(--teal);
+      font-family: 'Share Tech Mono', monospace;
+      font-size: 14px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      cursor: pointer;
+      border-radius: 2px;
+    }
+
+    /* fill with accent colour on hover */
+    .btn:hover {
+      background: var(--teal);
+      color: var(--bg);
+    }
+
+    /* decode button uses the pink accent instead */
+    .btn.decode {
+      border-color: var(--pink);
+      color: var(--pink);
+    }
+
+    .btn.decode:hover {
+      background: var(--pink);
+      color: var(--bg);
+    }
+
+    /* status bar - shows success or error messages */
+    .status {
+      margin-top: 20px;
+      padding: 12px 16px;
+      border-radius: 2px;
+      font-size: 12px;
+      display: none;
+      border-left: 3px solid var(--dim);
+    }
+
+    .status.show {
+      display: block;
+    }
+
+    /* green/teal for success */
+    .status.good {
+      border-left-color: var(--teal);
+      color: var(--teal);
+      background: rgba(0, 255, 224, 0.05);
+    }
+
+    /* pink/red for errors */
+    .status.bad {
+      border-left-color: var(--pink);
+      color: var(--pink);
+      background: rgba(255, 107, 107, 0.05);
+    }
+
+    /* result box - where the decoded message is displayed */
+    .result {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 16px;
+      min-height: 120px;
+      color: var(--teal);
+      font-size: 13px;
+      line-height: 1.7;
+      /* pre-wrap preserves line breaks in the hidden message */
+      white-space: pre-wrap;
+      word-break: break-word;
+      display: none;
+    }
+
+    .result.show {
+      display: block;
+    }
+
+    /* download link - appears after encoding is done */
+    .download {
+      display: none;
+      margin-top: 12px;
+      padding: 10px 16px;
+      background: rgba(0,255,224,0.08);
+      border: 1px solid var(--teal);
+      border-radius: 2px;
+      color: var(--teal);
+      text-decoration: none;
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .download.show {
+      display: block;
+    }
+
+    .footer {
+      margin-top: 60px;
+      padding-top: 20px;
+      border-top: 1px solid var(--border);
+      color: var(--dim);
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="header-row">
+        <div class="blink"></div>
+        <h1>hide in wav</h1>
+      </div>
+      <div class="subhead">LSB Encoding · .WAV FILES ONLY</div>
+    </div>
+
+    <div class="tabs">
+      <!--
+        passing the event object explicitly into switchTab so we know
+        which button was clicked. relying on the global 'event' variable
+        is unreliable across different browsers.
+      -->
+      <button class="tab active" onclick="switchTab(event, 'encode')">▶ HIDE</button>
+      <button class="tab" onclick="switchTab(event, 'decode')">◀ FIND</button>
+    </div>
+
+    <!-- encode panel -->
+    <div id="encodePanel" class="panel active">
+      <div class="step">① pick wav</div>
+
+      <!--
+        no onclick needed here anymore - the file input sits on top of the
+        dropzone with opacity:0, so clicking anywhere on it naturally
+        opens the file dialog without needing javascript to trigger it.
+      -->
+      <div class="dropzone" id="encodeDrop">
+        <div class="dropzone-icon">◈</div>
+        <div class="dropzone-text">drop or click</div>
+        <div class="filename" id="encodeName"></div>
+        <!-- input covers the whole dropzone via css (position:absolute, opacity:0) -->
+        <input type="file" id="encodeFile" accept=".wav">
+      </div>
+
+      <div class="capacity" id="capBox">
+        <span id="capText"></span>
+        <div class="capacity-bar">
+          <div class="capacity-fill" id="capFill"></div>
+        </div>
+      </div>
+
+      <div class="step">② message</div>
+      <textarea id="msgInput" placeholder="type here..."></textarea>
+      <div class="counter" id="charCounter">0</div>
+
+      <button class="btn" id="hideBtn">◈ hide ◈</button>
+      <a href="#" class="download" id="dlLink" download="output.wav">↓ get wav</a>
+      <div class="status" id="encStatus"></div>
+    </div>
+
+    <!-- decode panel -->
+    <div id="decodePanel" class="panel">
+      <div class="step">① pick wav</div>
+
+      <div class="dropzone" id="decodeDrop">
+        <div class="dropzone-icon">◈</div>
+        <div class="dropzone-text">drop or click</div>
+        <div class="filename" id="decodeName"></div>
+        <input type="file" id="decodeFile" accept=".wav">
+      </div>
+
+      <button class="btn decode" id="findBtn">◈ find ◈</button>
+      <div class="step" id="resHead" style="display:none">② found</div>
+      <div class="result" id="resBox"></div>
+      <div class="status" id="decStatus"></div>
+    </div>
+
+    <div class="footer">
+      audio stego · client side
+    </div>
+  </div>
+
+  <script>
+    // end marker - appended to every message before encoding.
+    // the decoder reads bits until it sees this string, then stops.
+    // without it we'd have no way of knowing where the message ends.
+    var MARKER = "###END###";
+
+    // wav files have a 44 byte header before the actual audio data starts.
+    // we skip these bytes when reading/writing samples.
+    var HEADER_SIZE = 44;
+
+    // stores the raw arraybuffer of whatever file the user has loaded
+    var encFile = null;
+    var decFile = null;
+
+    /*
+      tab switching - shows the correct panel and highlights the correct tab.
+
+      we accept the event object as a parameter rather than using the global
+      'event' variable, which isn't reliable in all browsers. e.target is
+      the button that was actually clicked.
+    */
+    function switchTab(e, w) {
+      // remove active from all tabs
+      var ts = document.getElementsByClassName('tab');
+      for(var i = 0; i < ts.length; i++) {
+        ts[i].classList.remove('active');
+      }
+      // add active to whichever tab was clicked
+      e.target.classList.add('active');
+      
+      // remove active from all panels
+      var ps = document.getElementsByClassName('panel');
+      for(var i = 0; i < ps.length; i++) {
+        ps[i].classList.remove('active');
+      }
+      // show the panel matching the tab name (e.g. 'encode' -> 'encodePanel')
+      document.getElementById(w + 'Panel').classList.add('active');
+    }
+
+    /*
+      file handler for the encode dropzone.
+      sets up drag-and-drop events and listens for file input changes.
+    */
+    function setupEncoder() {
+      var z = document.getElementById('encodeDrop');
+      var inp = document.getElementById('encodeFile');
+      var n = document.getElementById('encodeName');
+
+      // fired when user picks a file through the file dialog
+      inp.addEventListener('change', function() {
+        if(this.files && this.files[0]) {
+          load(this.files[0]);
+        }
+      });
+
+      // fired while user is dragging a file over the zone - prevents
+      // the browser's default behaviour (which would open the file)
+      z.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        this.classList.add('dragover');
+      });
+
+      // fired when the drag leaves the zone without dropping
+      z.addEventListener('dragleave', function() {
+        this.classList.remove('dragover');
+      });
+
+      // fired when the user drops a file onto the zone
+      z.addEventListener('drop', function(e) {
+        e.preventDefault();
+        this.classList.remove('dragover');
+        if(e.dataTransfer.files && e.dataTransfer.files[0]) {
+          load(e.dataTransfer.files[0]);
+        }
+      });
+
+      // reads the file as a raw arraybuffer (binary data)
+      // filereader is the browser api for accessing local files
+      function load(f) {
+        if(!f.name.toLowerCase().endsWith('.wav')) {
+          alert('needs to be .wav');
+          return;
+        }
+
+        var r = new FileReader();
+
+        // onload fires when the file has fully loaded into memory
+        r.onload = function(e) {
+          n.innerText = f.name;
+          z.classList.add('hasfile');
+          encFile = e.target.result;
+          
+          // calculate and display capacity info
+          // (file size - header) / 2 bytes per sample = number of samples
+          // samples / 8 = max characters we can hide
+          if(encFile) {
+            var db = encFile.byteLength - HEADER_SIZE;
+            var smpls = db / 2;
+            var maxc = Math.floor(smpls / 8);
+            var sec = (db / 44100 / 2).toFixed(1);
+            
+            document.getElementById('capText').innerHTML = 
+              maxc.toLocaleString() + ' chars max · ' + sec + 's';
+            
+            var msg = document.getElementById('msgInput').value;
+            var p = maxc > 0 ? (msg.length / maxc) * 100 : 0;
+            if(p > 100) p = 100;
+            document.getElementById('capFill').style.width = p + '%';
+            document.getElementById('capBox').classList.add('show');
+          }
+          
+          document.getElementById('encStatus').classList.remove('show');
+          document.getElementById('dlLink').classList.remove('show');
+        };
+        r.readAsArrayBuffer(f);
+      }
+    }
+
+    // file handler for the decode dropzone - same structure as encode
+    function setupDecoder() {
+      var z = document.getElementById('decodeDrop');
+      var inp = document.getElementById('decodeFile');
+      var n = document.getElementById('decodeName');
+
+      inp.addEventListener('change', function() {
+        if(this.files && this.files[0]) {
+          load(this.files[0]);
+        }
+      });
+
+      z.addEventListener('dragover', function(e) {
+        e.preventDefault();
+        this.classList.add('dragover');
+      });
+
+      z.addEventListener('dragleave', function() {
+        this.classList.remove('dragover');
+      });
+
+      z.addEventListener('drop', function(e) {
+        e.preventDefault();
+        this.classList.remove('dragover');
+        if(e.dataTransfer.files && e.dataTransfer.files[0]) {
+          load(e.dataTransfer.files[0]);
+        }
+      });
+
+      function load(f) {
+        if(!f.name.toLowerCase().endsWith('.wav')) {
+          alert('.wav only');
+          return;
+        }
+
+        var r = new FileReader();
+        r.onload = function(e) {
+          n.innerText = f.name;
+          z.classList.add('hasfile');
+          decFile = e.target.result;
+          
+          document.getElementById('decStatus').classList.remove('show');
+          document.getElementById('resBox').classList.remove('show');
+          document.getElementById('resHead').style.display = 'none';
+        };
+        r.readAsArrayBuffer(f);
+      }
+    }
+
+    setupEncoder();
+    setupDecoder();
+
+    // update character counter and capacity bar as the user types
+    document.getElementById('msgInput').addEventListener('input', function() {
+      var l = this.value.length;
+      document.getElementById('charCounter').innerText = l + 'c';
+      
+      if(encFile) {
+        var db = encFile.byteLength - HEADER_SIZE;
+        var smpls = db / 2;
+        var maxc = Math.floor(smpls / 8);
+        var p = maxc > 0 ? (l / maxc) * 100 : 0;
+        if(p > 100) p = 100;
+        document.getElementById('capFill').style.width = p + '%';
+      }
+    });
+
+    /*
+      textToBits - converts a string into a flat array of 1s and 0s.
+
+      every character has an ascii code (e.g. 'A' = 65).
+      that number in binary is 8 bits (e.g. 65 = 01000001).
+      we extract each bit using right-shift (>>) and bitwise AND (&).
+
+      example for 'H' (ascii 72 = 01001000):
+        bit 7: (72 >> 7) & 1 = 0
+        bit 6: (72 >> 6) & 1 = 1
+        ...and so on, giving [0,1,0,0,1,0,0,0]
+    */
+    function toBits(s) {
+      var b = [];
+      for(var i = 0; i < s.length; i++) {
+        var c = s.charCodeAt(i);
+        // extract each bit from most significant (7) to least significant (0)
+        for(var x = 7; x >= 0; x--) {
+          b.push((c >> x) & 1);
+        }
+      }
+      return b;
+    }
+
+    /*
+      fromBits - converts a flat array of 1s and 0s back into a string.
+      this is the reverse of toBits.
+
+      takes 8 bits at a time and reconstructs the ascii number using
+      left-shift (<<) and bitwise OR (|).
+
+      example for [0,1,0,0,1,0,0,0]:
+        0<<7 | 1<<6 | 0<<5 | 0<<4 | 1<<3 | 0<<2 | 0<<1 | 0<<0
+        = 0 + 64 + 0 + 0 + 8 + 0 + 0 + 0 = 72 = 'H'
+    */
+    function fromBits(b) {
+      var s = '';
+      for(var i = 0; i + 8 <= b.length; i += 8) {
+        var code = 0;
+        for(var j = 0; j < 8; j++) {
+          code |= b[i + j] << (7 - j);
+        }
+        s += String.fromCharCode(code);
+      }
+      return s;
+    }
+
+    /*
+      getSamples - reads the raw 16-bit audio samples from a wav arraybuffer.
+
+      Int16Array interprets the buffer as signed 16-bit integers.
+      we pass HEADER_SIZE as the byte offset to skip the wav header
+      and start reading from the actual audio data.
+    */
+    function getSamples(b) {
+      return new Int16Array(b, HEADER_SIZE);
+    }
+
+    /*
+      rebuild - constructs a new valid wav file from modified audio samples.
+
+      a wav file is made up of:
+        - a 44 byte header containing metadata (sample rate, channels etc.)
+        - the raw audio samples as 16-bit integers
+
+      we copy the metadata from the original file so the output wav is
+      identical in format, just with different sample values.
+      DataView lets us write specific data types at exact byte positions.
+    */
+    function rebuild(orig, samples) {
+      var ds = samples.length * 2;     // data size in bytes (2 bytes per sample)
+      var ts = HEADER_SIZE + ds;       // total file size
+      var out = new ArrayBuffer(ts);
+      var outV = new DataView(out);
+      var origV = new DataView(orig);
+
+      // "RIFF" marker - identifies this as a riff format file
+      outV.setUint32(0, 0x52494646, false);
+      // total file size minus the 8 byte riff chunk header
+      outV.setUint32(4, ts - 8, true);
+      // "WAVE" marker - identifies this as wav audio
+      outV.setUint32(8, 0x57415645, false);
+      
+      // "fmt " sub-chunk - describes the audio format
+      outV.setUint32(12, 0x666d7420, false);
+      outV.setUint32(16, 16, true);      // fmt chunk is always 16 bytes for pcm
+      outV.setUint16(20, 1, true);       // audio format 1 = uncompressed pcm
+      // copy channels, sample rate and other format info from original file
+      outV.setUint16(22, origV.getUint16(22, true), true);
+      outV.setUint32(24, origV.getUint32(24, true), true);
+      outV.setUint32(28, origV.getUint32(28, true), true);
+      outV.setUint16(32, origV.getUint16(32, true), true);
+      outV.setUint16(34, origV.getUint16(34, true), true);
+      
+      // "data" sub-chunk - contains the actual audio samples
+      outV.setUint32(36, 0x64617461, false);
+      outV.setUint32(40, ds, true);      // size of the audio data in bytes
+
+      // write each modified sample into the output buffer
+      for(var i = 0; i < samples.length; i++) {
+        outV.setInt16(HEADER_SIZE + i * 2, samples[i], true);
+      }
+
+      return out;
+    }
+
+    // encode button - hides the message in the wav file
+    document.getElementById('hideBtn').addEventListener('click', function() {
+      if(!encFile) {
+        var st = document.getElementById('encStatus');
+        st.innerText = 'no file';
+        st.className = 'status show bad';
+        return;
+      }
+
+      var m = document.getElementById('msgInput').value;
+      if(m == '') {
+        var st = document.getElementById('encStatus');
+        st.innerText = 'type something';
+        st.className = 'status show bad';
+        return;
+      }
+
+      var s = getSamples(encFile);
+
+      // append the end marker before converting to bits
+      // so the decoder knows where the message ends
+      var fm = m + MARKER;
+      var bits = toBits(fm);
+
+      // check the message fits - each sample holds 1 bit
+      if(bits.length > s.length) {
+        var maxc = Math.floor(s.length / 8);
+        var st = document.getElementById('encStatus');
+        st.innerText = 'too long (max ' + maxc + ')';
+        st.className = 'status show bad';
+        return;
+      }
+
+      // copy all samples then overwrite the lsb of each one with a message bit.
+      // (s[i] & ~1) clears the last bit.
+      // | bits[i] sets the last bit to our message bit.
+      var ns = new Int16Array(s.length);
+      for(var i = 0; i < s.length; i++) {
+        if(i < bits.length) {
+          ns[i] = (s[i] & ~1) | bits[i];
+        } else {
+          // samples beyond the message are copied unchanged
+          ns[i] = s[i];
+        }
+      }
+
+      // build the output wav and create a temporary download url
+      var wd = rebuild(encFile, ns);
+      var blob = new Blob([wd], { type: 'audio/wav' });
+      var url = URL.createObjectURL(blob);
+
+      var link = document.getElementById('dlLink');
+      link.href = url;
+      link.classList.add('show');
+
+      var p = ((bits.length / s.length) * 100).toFixed(1);
+      var st = document.getElementById('encStatus');
+      st.innerText = 'done (' + p + '%)';
+      st.className = 'status show good';
+    });
+
+    // decode button - extracts the hidden message from the wav file
+    document.getElementById('findBtn').addEventListener('click', function() {
+      if(!decFile) {
+        var st = document.getElementById('decStatus');
+        st.innerText = 'pick a file';
+        st.className = 'status show bad';
+        return;
+      }
+
+      var s = getSamples(decFile);
+
+      // b accumulates bits into a byte, bc counts how many bits we've added
+      var b = 0;
+      var bc = 0;
+      var r = '';
+
+      for(var i = 0; i < s.length; i++) {
+        // extract the lsb from this sample using bitwise AND with 1
+        var bit = s[i] & 1;
+
+        // shift b left to make room, then add the new bit on the right.
+        // after 8 iterations b holds a complete byte (8 bits = 1 character).
+        // example building 'H' (01001000):
+        //   after bit 0 (0): b = 00000000
+        //   after bit 1 (1): b = 00000001 -> 00000010 -> ... until b = 01001000 = 72
+        b = (b << 1) | bit;
+        bc++;
+
+        // once we have 8 bits, convert to a character and reset
+        if(bc == 8) {
+          r += String.fromCharCode(b);
+          b = 0;
+          bc = 0;
+
+          // check if the end marker has appeared - if so we're done
+          if(r.indexOf(MARKER) != -1) {
+            // strip the end marker off the result to get just the message
+            var hidden = r.substring(0, r.length - MARKER.length);
+            document.getElementById('resBox').innerText = hidden;
+            document.getElementById('resBox').classList.add('show');
+            document.getElementById('resHead').style.display = 'block';
+            
+            var st = document.getElementById('decStatus');
+            st.innerText = 'found ' + hidden.length + ' chars';
+            st.className = 'status show good';
+            return;
+          }
+        }
+      }
+
+      // reached the end of the file without finding the marker
+      var st = document.getElementById('decStatus');
+      st.innerText = 'nothing found';
+      st.className = 'status show bad';
+    });
+  </script>
+</body>
+</html>
