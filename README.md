@@ -9,6 +9,8 @@ decode.html : a minimal decode-only version
 
 AudioStego : a full working version including complete UI
 
+Sample.wav : an audio sample to experiment with
+
 # How to use
 
 Download the files
