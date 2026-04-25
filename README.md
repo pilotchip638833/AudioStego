@@ -24,5 +24,6 @@ No installations or server required
 
 File must not be re-compressed after encoding or the message will be lost
 
-Built with
-HTML, CSS, JavaScript — no external libraries.
+
+Built with HTML, CSS, JavaScript — no external libraries.
+-
