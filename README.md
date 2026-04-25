@@ -4,7 +4,9 @@ An audio steganography project exploring bit manipulation and how hidden data ca
 # The files
 
 encode.html : a minimal encode-only version
+-
 decode.html : a minimal decode-only version
+-
 AudioStego : a full working version including complete UI
 
 # How to use
@@ -22,4 +24,5 @@ No installations or server required
 File must not be re-compressed after encoding or the message will be lost
 
 Built with
+-
 HTML, CSS, JavaScript — no external libraries.
